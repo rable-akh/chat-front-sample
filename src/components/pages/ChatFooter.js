@@ -1,18 +1,14 @@
 import React, {useState} from 'react'
-import { callUser, hangup, peerConnect } from '../../cores/RTCCore'
 import {Button, Modal} from 'react-bootstrap'
 import { usePeer } from '../../cores/Peer.Provider'
-import ReactPlayer from "react-player"
 
-const ChatFooter = ({socket, selectedUser, calling, setCalling, audioRef, call, remoteStreamRef}) => {
+const ChatFooter = ({socket, selectedUser, calling, setCalling, audioRef, call, remoteStreamRef, myStream}) => {
 
-    const { peer, createOffer, createAnswer } = usePeer()
+    const { peer, createOffer, sendStream } = usePeer()
 
     const userD = localStorage.getItem("user")?JSON.parse(localStorage.getItem("user")):{}
 
     const [message, setMessage] = useState("")
-
-    const [myStream, setMyStream] = useState(null)
     
     const handleTyping = () => socket.emit("typing", {to: selectedUser._id, msg: `${userD?.user} is typing`})
     const handleTypingStop = () => socket.emit("typing", {to: selectedUser._id, msg: ""})
@@ -33,93 +29,109 @@ const ChatFooter = ({socket, selectedUser, calling, setCalling, audioRef, call, 
         setMessage("")
     }
 
-    const onHandleCall = (e) => {
+    const onHandleCall = async (e) => {
         e.preventDefault()
 
-        const constraints = {
-            'video': false,
-            'audio': true
-        }
-        // callUser(socket, selectedUser?._id, selectedUser?.user, userD?._id, userD?.user)
-        // setCalling(true)
-        navigator.mediaDevices.getUserMedia(constraints)
-        .then(async stream => {
-            // console.log('Got MediaStream:', stream);
-            // callUser(socket, selectedUser?._id, selectedUser?.user, userD?._id, userD?.user, stream)
-            stream.getTracks().forEach(track => peer.addTrack(track, stream));
-            // peer.ontrack = (e) => {
-            //     if (audioRef.current) {
-            //         console.log(e.streams[0]);
-            //         audioRef.current.srcObject = e.streams[0];
-            //     }
-            // }
-            
-            // audioRef.current.srcObject = stream;
-            
-            const offer = await createOffer();
-            socket.emit("call-user", {
-                offer, 
-                to: selectedUser?._id,
-                toUsr: selectedUser?.user, 
-                from: userD?._id,
-                fromUsr: userD?.user
-            })
-            
-            setCalling(true)
-            // audioRef.current.play();
+        
+        sendStream(myStream)
+
+        const offer = await createOffer();
+        
+        socket.emit("call-user", {
+            offer, 
+            to: selectedUser?._id,
+            toUsr: selectedUser?.user, 
+            from: userD?._id,
+            fromUsr: userD?.user
         })
-        .catch(error => {
-            alert("You have not any devices.")
-            console.error('Error accessing media devices.', error);
-        });
+        
+        setCalling(true)
+        // const constraints = {
+        //     'video': false,
+        //     'audio': true
+        // }
+        // // callUser(socket, selectedUser?._id, selectedUser?.user, userD?._id, userD?.user)
+        // // setCalling(true)
+        // navigator.mediaDevices.getUserMedia(constraints)
+        // .then(async stream => {
+        //     console.log('onHandleCall:', stream);
+        //     // callUser(socket, selectedUser?._id, selectedUser?.user, userD?._id, userD?.user, stream)
+        //     stream.getTracks().forEach(track => {
+        //         peer.addTrack(track, stream)
+        //     });
+        //     // peer.ontrack = (e) => {
+        //     //     if (audioRef.current) {
+        //     //         console.log(e.streams[0]);
+        //     //         audioRef.current.srcObject = e.streams[0];
+        //     //     }
+        //     // }
+        //     // audioRef.current.srcObject = stream;
+            
+        //     const offer = await createOffer();
+        //     socket.emit("call-user", {
+        //         offer, 
+        //         to: selectedUser?._id,
+        //         toUsr: selectedUser?.user, 
+        //         from: userD?._id,
+        //         fromUsr: userD?.user
+        //     })
+            
+        //     setCalling(true)
+        //     // audioRef.current.play();
+        // })
+        // .catch(error => {
+        //     alert("You have not any devices.")
+        //     console.error('Error accessing media devices.', error);
+        // });
     }
 
-    const onHandleAnswer = (e) => {
+    const onHandleAnswer = async (e) => {
+        setCalling(true)
+
+        // audioRef.current.srcObject = stream[0]
+
+        // await peer.setRemoteDescription(
+        //     new RTCSessionDescription(data.offer)
+        // )
+
+        // const state = peer.signalingState;
+        // const iceConnectionState = peer.iceConnectionState;
+
+        // console.log('addAnswer',state);
+        // console.log('addAnswer',iceConnectionState);
+        console.log("onHandleAnswer", myStream);
+        sendStream(myStream)
+    
+        const answer = await peer.createAnswer()
+        await peer.setLocalDescription( new RTCSessionDescription(answer));
         
-        const constraints = {
-            'video': false,
-            'audio': true
-        }
-        navigator.mediaDevices.getUserMedia(constraints)
-        .then(async stream => {
-            // console.log('Got MediaStream:', stream);
-            stream.getTracks().forEach(track => peer.addTrack(track, stream));
-            // madeAnswer(socket, data)
-            setCalling(true)
-
-            // audioRef.current.srcObject = stream[0]
-
-            // await peer.setRemoteDescription(
-            //     new RTCSessionDescription(data.offer)
-            // )
-
-            // const state = peer.signalingState;
-            // const iceConnectionState = peer.iceConnectionState;
-
-            // console.log('addAnswer',state);
-            // console.log('addAnswer',iceConnectionState);
-        
-            const answer = await peer.createAnswer()
-            await peer.setLocalDescription( new RTCSessionDescription(answer));
-            
-
-            socket.emit("make-answer", {
-                answer, 
-                to: selectedUser?._id,
-                toUsr: selectedUser?.user, 
-                from: userD?._id,
-                fromUsr: userD?.user
-            })
-            // audioRef.current.play();
-            // socket.on('answer-made', (data) => {
-
-            //     // addAnswer(socket, data, isAlreadyCalling, setIsAlreadyCalling)
-            // })
+        socket.emit("make-answer", {
+            answer, 
+            to: selectedUser?._id,
+            toUsr: selectedUser?.user, 
+            from: userD?._id,
+            fromUsr: userD?.user
         })
-        .catch(error => {
-            alert("You have not any devices.")
-            console.error('Error accessing media devices.', error);
-        });
+        // const constraints = {
+        //     'video': false,
+        //     'audio': true
+        // }
+        // navigator.mediaDevices.getUserMedia(constraints)
+        // .then(async stream => {
+        //     console.log('onHandleAnswer:', stream);
+        //     stream.getTracks().forEach(track => peer.addTrack(track, stream));
+        //     // madeAnswer(socket, data)
+            
+        //     // audioRef.current.play();
+        //     // socket.on('answer-made', (data) => {
+
+        //     //     // addAnswer(socket, data, isAlreadyCalling, setIsAlreadyCalling)
+        //     // })
+        // })
+        // .catch(error => {
+        //     alert("You have not any devices.")
+        //     console.error('Error accessing media devices.', error);
+        // });
         
     }
 
@@ -154,8 +166,6 @@ const ChatFooter = ({socket, selectedUser, calling, setCalling, audioRef, call, 
                 </form>
             </div>
         </div>
-
-        {/* <ReactPlayer url={myStream}/> */}
         
         <Modal show={calling}>
             <Modal.Header>

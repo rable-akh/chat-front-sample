@@ -8,7 +8,7 @@ import ChatFooter from './ChatFooter'
 import { usePeer } from '../../cores/Peer.Provider'
 
 const ChatPage = ({socket}) => { 
-  const { peer, createOffer, remoteStream } = usePeer()
+  const { peer, sendStream, remoteStream } = usePeer()
 
   const [messages, setMessages] = useState([])
   const [typingStatus, setTypingStatus] = useState("")
@@ -19,6 +19,7 @@ const ChatPage = ({socket}) => {
   const remoteStreamRef = useRef(null);
   
   const [calling, setCalling] = useState(false)
+  const [myStream, setMyStream] = useState(null)
 
   const [users, setUsers] = useState([])
   const [newMsgFrom, setNewMsgFrom] = useState(null)
@@ -51,8 +52,6 @@ const ChatPage = ({socket}) => {
   }, [socket])
 
   useEffect(() => {
-    const rs = new MediaStream()
-    remoteStreamRef.current = rs
     var rd = localStorage.getItem("user")?JSON.parse(localStorage.getItem("user")):{}
     socket.auth = {user: rd.user}
     // socket.on("connect", () => {
@@ -93,12 +92,19 @@ const ChatPage = ({socket}) => {
       await peer.setRemoteDescription(
         new RTCSessionDescription(d.offer)
       )
-      setCalling(true)
+      setCalling(!calling)
     },
-    [peer],
+    [calling, peer],
   )
 
-  const answerCall = useCallback(async (data) => {      
+  const getMediaStream = useCallback(async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true, video: false})
+    // audioRef.current.srcObject = stream
+    // console.log(stream);
+    setMyStream(stream)
+  }, [])
+
+  const answerCall = useCallback(async (data) => {   
 
     await peer.setRemoteDescription(
       new RTCSessionDescription(data.answer)
@@ -110,22 +116,72 @@ const ChatPage = ({socket}) => {
     // console.log('addAnswer',state);
     // console.log('addAnswer',iceConnectionState);
 
+    if(calling){
+      const localOffer = peer.localDescription
+      console.log("localOffer reply", localOffer);
+      socket.emit("call-user", {
+        offer: localOffer, 
+        to: data?.from,
+        toUsr: data?.fromUsr, 
+        from: data?.to,
+        fromUsr: data?.toUsr
+      })
+    }
+
     setCalling(false)
     
-    console.log(remoteStream);
-    remoteStreamRef.current.srcObject = remoteStream
+    // remoteStreamRef.current.srcObject = remoteStream
 
     socket.emit("answer-success", {to: data.from, msg:"answer"})
 
     // addAnswer(socket, data, isAlreadyCalling, setIsAlreadyCalling)
     // audioRef.current.pause();
-  },[peer, remoteStream, socket])
+  },[calling, peer, socket])
+
+  // const handleNegotiation = useCallback(async (e) => {
+  //   const localOffer = await peer.createOffer()
+  //   // await peer.setLocalDescription(localOffer)
+  //   console.log(localOffer);
+  //   socket.emit("call-user", {
+  //     localOffer, 
+  //     to: selectUser?._id,
+  //     toUsr: selectUser?.user, 
+  //     from: userD?._id,
+  //     fromUsr: userD?.user
+  //   })
+  // }, [peer, selectUser?._id, selectUser?.user, socket, userD?._id, userD?.user])
+
+  // useEffect(() => {
+  //   peer.addEventListener("negotiationneeded", handleNegotiation)
+  //   return () => {
+  //     peer.removeEventListener("negotiationneeded", handleNegotiation)
+  //   }
+  // }, [handleNegotiation, peer])
+
+  // const handleCandidate = useCallback((e) => {
+  //   console.log(e);
+  // }, [])
+
+  // useEffect(() => {
+  //   peer.addEventListener("icecandidate", handleCandidate)
+  //   return () => {
+  //     peer.removeEventListener("icecandidate", handleCandidate)
+  //   }
+  // }, [handleCandidate, peer])
+  
+  useEffect(() => {
+    console.log("remoteStream", remoteStream);
+    remoteStreamRef.current.srcObject = remoteStream
+  },[remoteStream])
   
   const callSuccess = useCallback((d) => {
+    // sendStream(myStream)   
     setCalling(false)
-    console.log(remoteStream);
-    remoteStreamRef.current.srcObject = remoteStream
-  } ,[remoteStream])
+  } ,[])
+
+  useEffect(() => {
+    getMediaStream()
+  },[getMediaStream])
 
   useEffect(() => {
     // audioRef.current.play();
@@ -198,11 +254,11 @@ const ChatPage = ({socket}) => {
           selectUser&&(
             <>
               <ChatBody socket={socket} selectedUser={selectUser} messages={messages} typingStatus={typingStatus} lastMessageRef={lastMessageRef}/>
-              <ChatFooter socket={socket} selectedUser={selectUser} calling={calling} setCalling={setCalling} audioRef={audioRef} remoteStreamRef={remoteStreamRef}/>
+              <ChatFooter socket={socket} selectedUser={selectUser} calling={calling} setCalling={setCalling} audioRef={audioRef} remoteStreamRef={remoteStreamRef} myStream={myStream}/>
             </>
           )
         }
-      <audio ref={audioRef} autoPlay/>
+      {/* <audio ref={audioRef} autoPlay/> */}
       <audio ref={remoteStreamRef} autoPlay/>
       </div>
     </div>

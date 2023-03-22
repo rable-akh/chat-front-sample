@@ -25,10 +25,10 @@ export const PeerProvider = (props) => {
     }
 
     const createAnswer = async (offer) => {
-        await peer.setLocalDescription(offer);
+        await peer.setRemoteDescription(offer);
         const answer = await peer.createAnswer()
         await peer.setLocalDescription(answer)
-        return offer
+        return answer
     }
 
     const setRemoteAnswer = async (answer) => {
